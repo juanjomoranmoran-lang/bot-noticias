@@ -53,7 +53,7 @@ CRITERIO = """Eres el editor de un servicio de noticias para un lector en Españ
 - 1-5: menor, local, opinión, análisis sin hecho nuevo, curiosidades, seguimiento rutinario de un tema ya conocido.
 Deporte, espectáculos y famosos: marca "soft": true y sé muy exigente. 8 o más solo para hitos (final de un Mundial, combate por el título de una figura española como Topuria, muerte de una leyenda). Una jornada normal, 3 o menos.
 Marca "dup": true si cuenta lo mismo que una YA ENVIADA sin novedad sustancial, o si repite otra NUEVA (deja sin marcar solo la mejor de cada grupo).
-Responde SOLO con un array JSON, un objeto por noticia nueva: {"i":0,"s":5,"soft":false,"dup":false}. Si s>=6 y no es dup, añade "t" (titular en español, máximo 12 palabras) y "r" (resumen en español, 1-2 frases, solo hechos presentes en el texto)."""
+Responde SOLO con un array JSON, un objeto por noticia nueva: {"i":0,"s":5,"soft":false,"dup":false}. Si s>=6 y no es dup, añade "t" (titular en español, máximo 12 palabras) y "r" (una o dos frases en español que aporten datos que no estén ya en el titular: cifras, quién, dónde, consecuencias). Usa solo lo que diga el texto: no añadas años, nombres ni datos de tu memoria, y no repitas el titular con otras palabras. Si el texto no aporta nada más que el titular, deja "r" vacío."""
 # -----------------------------------------------------------
 
 ESTADO = "state.json"
@@ -94,14 +94,16 @@ def leer_feeds(vistos):
             if uid in vistos or uid in ids:
                 continue
             ids.add(uid)
-            medio = (e.get("source") or {}).get("title") or fuente  # Google Noticias trae el medio real
+            medio = fuente
+            if fuente == "Google Noticias":  # trae el medio real de cada noticia
+                medio = (e.get("source") or {}).get("title") or fuente
             nuevas.append({"id": uid, "src": medio, "url": enlace,
                            "title": limpiar(e.title), "sum": limpiar(e.get("summary"))[:160]})
     return nuevas
 
 
 def puntuar(noticias, recientes):
-    texto = "YA ENVIADAS:\n" + ("\n".join(f"- {t}" for t in recientes) or "(ninguna)")
+    texto = f"FECHA DE HOY: {datetime.now(TZ):%d/%m/%Y}\n\nYA ENVIADAS:\n" + ("\n".join(f"- {t}" for t in recientes) or "(ninguna)")
     texto += "\n\nNUEVAS:\n" + "\n".join(
         f"{i} | [{n['src']}] {n['title']} — {n['sum']}" for i, n in enumerate(noticias))
     error = None
@@ -140,7 +142,8 @@ def telegram(texto):
 
 
 def linea(n):
-    return (f"<b>{html.escape(n['t'])}</b>\n{html.escape(n['r'])} "
+    resumen = html.escape(n["r"]) + " " if n.get("r") else ""
+    return (f"<b>{html.escape(n['t'])}</b>\n{resumen}"
             f"<a href=\"{html.escape(n['url'], quote=True)}\">{html.escape(n['src'])}</a>")
 
 
